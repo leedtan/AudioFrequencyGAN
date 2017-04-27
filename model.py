@@ -42,10 +42,6 @@ def pack(x):
     return tf.stack(x)
 
 class GAN:
-    def d_bn(self):
-        d_bn = ops.batch_norm(name='d_bn_clean' + str(self.d_bn_idx))
-        self.d_bn_idx += 1
-        return d_bn
     def __init__(self):
         
         self.batch_size = 10
@@ -53,6 +49,11 @@ class GAN:
         
         self.d_idx = 0
         self.g_bn_idx = 0
+        
+    def d_bn(self):
+        d_bn = ops.batch_norm(name='d_bn_clean' + str(self.d_bn_idx))
+        self.d_bn_idx += 1
+        return d_bn
 
     def g_bn(self):
         g_bn = ops.batch_norm(name='g_bn_clean' + str(self.g_bn_idx))
@@ -98,24 +99,10 @@ class GAN:
         self.gray3_noise = generate_gray_noise_audio(self.real_audio)
         
         self.gen_audio, l2_d1_grad, l2_d2_grad, l2_d3_grad, l2_d4_grad = self.generator(self.z_noise, vid)
-        random_mult = tf.random_uniform([1],0.4,.6)
-        self.half_audio = (self.real_audio * random_mult + self.gen_audio * (1 - random_mult))
-        random_mult = tf.random_uniform([1],0.2,.4)
-        self.quar_audio = (self.real_audio * random_mult + self.gen_audio * (1 - random_mult))
-        random_mult = tf.random_uniform([1],0.2,.8)
-        self.half_noise = (self.gray_noise * random_mult + self.gen_audio * (1 - random_mult))
         with tf.variable_scope('scope_disc'):
             real_img_logit, real_txt_logit, real_acts = self.discriminator(self.real_audio, vid)
             wrong_img_logit, wrong_txt_logit, wrong_acts = self.discriminator(self.real_audio, w_vid, reuse=True)
             gen_img_logit, gen_txt_logit, gen_acts = self.discriminator(self.gen_audio, vid, reuse=True)
-            '''
-            gray_img_logit, gray_txt_logit, gray_acts = self.discriminator(self.gray_noise, vid, reuse=True)
-            gray2_img_logit, gray2_txt_logit, gray2_acts = self.discriminator(self.gray2_noise, vid, reuse=True)
-            gray3_img_logit, gray3_txt_logit, gray3_acts = self.discriminator(self.gray3_noise, vid, reuse=True)
-            half_img_logit, half_txt_logit, half_acts = self.discriminator(self.half_audio, vid, reuse=True)
-            quar_img_logit, quar_txt_logit, quar_acts = self.discriminator(self.quar_audio, vid, reuse=True)
-            half_noise_img_logit, half_noise_txt_logit, half_noise_acts = self.discriminator(self.half_noise, vid, reuse=True)
-            '''
         
         
         pos_ex = tf.ones_like(real_img_logit)
@@ -126,35 +113,19 @@ class GAN:
         self.d_loss_wrong = tf.reduce_mean(c_e(wrong_img_logit, pos_ex)) + tf.reduce_mean(c_e(wrong_txt_logit, neg_ex))
             
         self.d_loss_gen = tf.reduce_mean(c_e(gen_img_logit, neg_ex)) + tf.reduce_mean(c_e(gen_txt_logit, neg_ex))
-        '''
-        self.d_loss_quar = tf.reduce_mean(c_e(quar_img_logit, pos_ex))/10 + tf.reduce_mean(c_e(quar_txt_logit, pos_ex))/10
-        
-        self.d_loss_half = tf.reduce_mean(c_e(half_img_logit, pos_ex))/2 + tf.reduce_mean(c_e(half_txt_logit, pos_ex))/2
-        
-        self.d_loss_half_noise = tf.reduce_mean(c_e(half_noise_img_logit, neg_ex))/2 + \
-                tf.reduce_mean(c_e(half_noise_txt_logit, neg_ex))/2
-        
-        self.d_loss_gray = tf.reduce_mean(c_e(gray_img_logit, neg_ex)) + tf.reduce_mean(c_e(gray_txt_logit, neg_ex)) + \
-            tf.reduce_mean(c_e(gray2_img_logit, neg_ex)) + tf.reduce_mean(c_e(gray2_txt_logit, neg_ex)) + \
-            tf.reduce_mean(c_e(gray3_img_logit, neg_ex)) + tf.reduce_mean(c_e(gray3_txt_logit, neg_ex))
-        '''
+
         real_acts = [tf.reshape(r, [-1]) for r in real_acts]
         gen_acts = [tf.reshape(r, [-1]) for r in gen_acts]
 
         real_acts = concat(0, real_acts)
         gen_acts = concat(0, gen_acts)
-        '''
-        real_means, real_stds = tf.nn.moments(real_acts,axes=[0])
-        fake_means, fake_stds = tf.nn.moments(gen_acts,axes=[0])
-        '''
+
         self.g_loss = tf.reduce_mean(c_e(gen_img_logit, pos_ex)) + tf.reduce_mean(c_e(gen_txt_logit, pos_ex))
         self.g_reg = tf.reduce_mean(tf.square(self.gen_audio - self.real_audio)) * 0 + \
-                tf.reduce_mean(tf.square(real_acts - gen_acts))/tf.reduce_mean(tf.square(real_acts)) * 0 + \
-                0*(l2_d1_grad * 1000 + l2_d2_grad * 500 + l2_d3_grad * 200 + l2_d4_grad * 100)
+                tf.reduce_mean(tf.square(real_acts - gen_acts))/tf.reduce_mean(tf.square(real_acts)) * 1e5
         
         d_loss = self.d_loss_real + self.d_loss_wrong + self.d_loss_gen
-        #+ self.d_loss_gray + \
-        #        self.d_loss_half + self.d_loss_quar + self.d_loss_half_noise
+
         self.d_loss = d_loss
         
         g_loss = self.g_loss
@@ -254,7 +225,8 @@ class GAN:
         shifted1 = tf.concat([shifted, shifted2], 1)
         diff = shifted1 - audio
         l2_d4_grad = tf.reduce_mean(tf.square(diff))
-        #audio = self.blur_audio(audio)
+
+
         return tf.tanh(audio), l2_d1_grad, l2_d2_grad, l2_d3_grad, l2_d4_grad
 
     def blur_audio(self, audio):

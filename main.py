@@ -76,7 +76,8 @@ audio = np.concatenate([np.expand_dims(a_freq.real,3), np.expand_dims(a_freq.ima
 
 #This reversable transformation maps the audio files to [-1,1] cleanly.
 #For a full release upon more success, this should be a function of the data.
-audio = np.sign(audio)*np.power(np.abs(audio), 1/20)/2.2
+scale_divisor = 2.3
+audio = np.sign(audio)*np.power(np.abs(audio), 1/20)/scale_divisor
 
 gan = model.GAN()
 gan.build_model()
@@ -122,25 +123,37 @@ for i in range(10000):
                             gan.real_audio : audio_clip,
                             gan.z_noise : np.random.rand(bs, z_len)
                         })
+            gen_audio_out = np.power(gen_audio * scale_divisor, 20) * np.sign(gen_audio)
+            real_audio_out = np.power(real_audio * scale_divisor, 20)* np.sign(real_audio)
             for idx in range(4,6):
                 ade = audio_clip[idx, :,:]
                 ade2 = np.fft.irfft(ade[:,0] + ade[:,1] * 1j,axis=0)
-    
+                hdr = 'outputs/ep_' + str(i) + '_b_' + str(batch_no) + '_'
+                
                 #Start by reversing the transformation from [-1,1] to the real frequency signal:
-                gen_audio_out = np.power(gen_audio * 2.2, 20) * np.sign(gen_audio)
                 #Then reverse the Fourier Transform
-                gen_audio_out = np.fft.irfft(gen_audio_out[idx,:,0] + gen_audio_out[idx,:,1] * 1j,axis=0)
+                gen_audio_spl = np.fft.irfft(gen_audio_out[idx,:,0] + gen_audio_out[idx,:,1] * 1j,axis=0)
     
-                real_audio_out = np.power(real_audio * 2.2, 20)* np.sign(real_audio)
-                real_audio_out = np.fft.irfft(real_audio_out[idx,:,0] + real_audio_out[idx,:,1] * 1j,axis=0)
+                real_audio_spl = np.fft.irfft(real_audio_out[idx,:,0] + real_audio_out[idx,:,1] * 1j,axis=0)
                 
                 #Write the Audio to file
-                write('gen_audio_out' + str(idx) + '.wav', 7998, gen_audio_out.astype('int16'))
-                write('real_audio_out' + str(idx) + '.wav', 7998, real_audio_out.astype('int16'))
+                write(hdr + 'gen_audio_out' + str(idx) + '.wav', 7998, gen_audio_spl.astype('int16'))
+                write(hdr + 'real_audio_out' + str(idx) + '.wav', 7998, real_audio_spl.astype('int16'))
     
                 #Write the time-series amplitudes to file
-                np.savetxt('np_gen_audio_out' + str(idx) + '.txt', gen_audio_out.astype('int16'))
-                np.savetxt('np_real_audio_out' + str(idx) + '.txt', real_audio_out.astype('int16'))
+                np.savetxt(hdr + 'np_gen_audio_out' + str(idx) + '.txt', gen_audio_spl.astype('int16'))
+                np.savetxt(hdr + 'np_real_audio_out' + str(idx) + '.txt', real_audio_spl.astype('int16'))
+                
+                #generate image of audio wave
+                plt.plot(gen_audio_spl.astype('int16'))
+                plt.title('generated audio')
+                plt.savefig(hdr + 'generated_audio_img' + str(idx))
+                plt.close()
+                plt.plot(real_audio_spl.astype('int16'))
+                plt.title('real audio')
+                plt.savefig(hdr + 'real_audio_img' + str(idx))
+                plt.close()
+            print('done printing batch')
 
 
 
