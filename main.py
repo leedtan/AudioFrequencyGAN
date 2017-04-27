@@ -76,7 +76,7 @@ audio = np.concatenate([np.expand_dims(a_freq.real,3), np.expand_dims(a_freq.ima
 
 #This reversable transformation maps the audio files to [-1,1] cleanly.
 #For a full release upon more success, this should be a function of the data.
-audio = np.sign(audio)*np.power(np.abs(audio), 1/20)/2.3
+audio = np.sign(audio)*np.power(np.abs(audio), 1/20)/2.2
 
 gan = model.GAN()
 gan.build_model()
@@ -123,24 +123,24 @@ for i in range(10000):
                             gan.z_noise : np.random.rand(bs, z_len)
                         })
             for idx in range(4,6):
-            ade = audio_clip[idx, :,:]
-            ade2 = np.fft.irfft(ade[:,0] + ade[:,1] * 1j,axis=0)
-
-            #Start by reversing the transformation from [-1,1] to the real frequency signal:
-            gen_audio_out = np.power(gen_audio * 2.3, 20) * np.sign(gen_audio)
-            #Then reverse the Fourier Transform
-            gen_audio_out = np.fft.irfft(gen_audio_out[idx,:,0] + gen_audio_out[idx,:,1] * 1j,axis=0)
-
-            real_audio_out = np.power(real_audio * 2.3, 20)* np.sign(real_audio)
-            real_audio_out = np.fft.irfft(real_audio_out[idx,:,0] + real_audio_out[idx,:,1] * 1j,axis=0)
-            
-            #Write the Audio to file
-            write('gen_audio_out' + str(idx) + '.wav', 7998, gen_audio_out.astype('int16'))
-            write('real_audio_out' + str(idx) + '.wav', 7998, real_audio_out.astype('int16'))
-
-            #Write the time-series amplitudes to file
-            np.savetxt('np_gen_audio_out' + str(idx) + '.txt', gen_audio_out.astype('int16'))
-            np.savetxt('np_real_audio_out' + str(idx) + '.txt', real_audio_out.astype('int16'))
+                ade = audio_clip[idx, :,:]
+                ade2 = np.fft.irfft(ade[:,0] + ade[:,1] * 1j,axis=0)
+    
+                #Start by reversing the transformation from [-1,1] to the real frequency signal:
+                gen_audio_out = np.power(gen_audio * 2.2, 20) * np.sign(gen_audio)
+                #Then reverse the Fourier Transform
+                gen_audio_out = np.fft.irfft(gen_audio_out[idx,:,0] + gen_audio_out[idx,:,1] * 1j,axis=0)
+    
+                real_audio_out = np.power(real_audio * 2.2, 20)* np.sign(real_audio)
+                real_audio_out = np.fft.irfft(real_audio_out[idx,:,0] + real_audio_out[idx,:,1] * 1j,axis=0)
+                
+                #Write the Audio to file
+                write('gen_audio_out' + str(idx) + '.wav', 7998, gen_audio_out.astype('int16'))
+                write('real_audio_out' + str(idx) + '.wav', 7998, real_audio_out.astype('int16'))
+    
+                #Write the time-series amplitudes to file
+                np.savetxt('np_gen_audio_out' + str(idx) + '.txt', gen_audio_out.astype('int16'))
+                np.savetxt('np_real_audio_out' + str(idx) + '.txt', real_audio_out.astype('int16'))
 
 
 
