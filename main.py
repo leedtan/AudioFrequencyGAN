@@ -10,7 +10,6 @@ import sys
 import matplotlib.pyplot as plt
 from scipy.misc import imresize
 
-#import matplotlib.pyplot as plt
 from scipy.fftpack import fft
 from scipy.io import wavfile
 import pylab
@@ -22,12 +21,6 @@ from Utils import ops
 from tensorflow.contrib.distributions import MultivariateNormalDiag as tf_norm
 
 prince = True
-
-def reshape(x, arr):
-    return tf.reshape(x, [int(a) for a in arr])
-
-def tf_resize(x, size):
-    return tf.image.resize_images(x, (size, size))
 
 audio = [None]*10
 vid = [None]*10
@@ -51,8 +44,9 @@ for i, n in enumerate(files):
         a_freq_clips[-1].append(np.fft.rfft(a_time_clips[-1][-1][:,0], axis=0))
     vid[i] = imageio.get_reader(video_name,  'ffmpeg')
     vid[i] = [imresize(vid[i].get_data(j), [16,16,3]) for j in range(33, max_len*33)]
-#b=np.array([(ele/2**8.)*2-1 for ele in audio[start:end,:]])# this is 8-bit track, b is now normalized on [-1,1)
+
 vid = np.array(vid)
+
 ####PROCESSING AND PROOF OF CONCEPT:
 aud_saved = audio
 freq_saved = a_freq_clips
@@ -79,6 +73,9 @@ a_from_freq = np.fft.irfft(a_freq[6, 7, :], axis=0)
 write('debug4.wav', 8000, a_from_freq.astype("int16"))
 
 audio = np.concatenate([np.expand_dims(a_freq.real,3), np.expand_dims(a_freq.imag,3)], axis=3)
+
+#This reversable transformation maps the audio files to [-1,1] cleanly.
+#For a full release upon more success, this should be a function of the data.
 audio = np.sign(audio)*np.power(np.abs(audio), 1/20)/2.3
 
 gan = model.GAN()
@@ -94,6 +91,7 @@ sess.run(tf.global_variables_initializer())
 saver = tf.train.Saver()
 g_loss = 1
 g_reg = 1
+
 for i in range(10000):
     for batch_no in range(3, 10):
         audio_start = batch_no * audio_second
@@ -103,11 +101,8 @@ for i in range(10000):
         videos = vid[:,video_start:video_end,:,:,:]
         shuf = np.random.randint(2, 6)
         wrongvideos = np.concatenate([videos[shuf:,:,:,:,:], videos[:shuf,:,:,:,:]], 0)
-        #audios = [audio[j][audio_start:audio_end,:] for j in range(10)]
-        #audio_clip = np.array(audios)
-        #audio_clip = audio[:,audio_start:audio_end,:]
         audio_clip = audio[:,batch_no,:,:]
-        if 1:#g_loss < 1.7:
+        if g_loss < 1.7:
             _, _, g_loss, g_reg, d_loss   = sess.run(
                     [g_optim, d_optim, gan.g_loss, gan.g_reg, gan.d_loss],
                     feed_dict = {
@@ -117,16 +112,8 @@ for i in range(10000):
                         gan.z_noise : np.random.rand(bs, z_len)
                     })
         print('epoch: ', i, 'batch: ', batch_no, 'g_loss:', g_loss, 'g_reg', g_reg, 'd_loss', d_loss)
-        for _ in range(1):
-            _, g_loss, g_reg   = sess.run(
-                        [g_optim, gan.g_loss, gan.g_reg],
-                        feed_dict = {
-                            gan.video : videos,
-                            gan.wrong_video : wrongvideos,
-                            gan.real_audio : audio_clip,
-                            gan.z_noise : np.random.rand(bs, z_len)
-                        })
-        if batch_no % 1 == 0:
+        if batch_no % 2 == 0:
+            print('printing some audios')
             _, g_loss, g_reg, gen_audio, real_audio   = sess.run(
                         [g_optim, gan.g_loss, gan.g_reg, gan.gen_audio, gan.real_audio],
                         feed_dict = {
@@ -136,19 +123,24 @@ for i in range(10000):
                             gan.z_noise : np.random.rand(bs, z_len)
                         })
             for idx in range(4,6):
-                print('printing audios')
-                try:
-                    ade = audio_clip[idx, :,:]
-                    ade2 = np.fft.irfft(ade[:,0] + ade[:,1] * 1j,axis=0)#np.power(ade * 2.3, 20) * np.sign(ade)
-                    gen_audio_out = np.power(gen_audio * 2.3, 20) * np.sign(gen_audio)
-                    gen_audio_out = np.fft.irfft(gen_audio_out[idx,:,0] + gen_audio_out[idx,:,1] * 1j,axis=0)
-                    real_audio_out = np.power(real_audio * 2.3, 20)* np.sign(real_audio)
-                    real_audio_out = np.fft.irfft(real_audio_out[idx,:,0] + real_audio_out[idx,:,1] * 1j,axis=0)
-                    write('debug_out' + str(idx) + '.wav', 7998, ade2.astype('int16'))
-                    write('gen_audio_out' + str(idx) + '.wav', 7998, gen_audio_out.astype('int16'))
-                    write('real_audio_out' + str(idx) + '.wav', 7998, real_audio_out.astype('int16'))
-                    np.savetxt('np_gen_audio_out' + str(idx) + '.txt', gen_audio_out.astype('int16'))
-                    np.savetxt('np_real_audio_out' + str(idx) + '.txt', real_audio_out.astype('int16'))
-                except:
-                    pass
+            ade = audio_clip[idx, :,:]
+            ade2 = np.fft.irfft(ade[:,0] + ade[:,1] * 1j,axis=0)
+
+            #Start by reversing the transformation from [-1,1] to the real frequency signal:
+            gen_audio_out = np.power(gen_audio * 2.3, 20) * np.sign(gen_audio)
+            #Then reverse the Fourier Transform
+            gen_audio_out = np.fft.irfft(gen_audio_out[idx,:,0] + gen_audio_out[idx,:,1] * 1j,axis=0)
+
+            real_audio_out = np.power(real_audio * 2.3, 20)* np.sign(real_audio)
+            real_audio_out = np.fft.irfft(real_audio_out[idx,:,0] + real_audio_out[idx,:,1] * 1j,axis=0)
+            
+            #Write the Audio to file
+            write('gen_audio_out' + str(idx) + '.wav', 7998, gen_audio_out.astype('int16'))
+            write('real_audio_out' + str(idx) + '.wav', 7998, real_audio_out.astype('int16'))
+
+            #Write the time-series amplitudes to file
+            np.savetxt('np_gen_audio_out' + str(idx) + '.txt', gen_audio_out.astype('int16'))
+            np.savetxt('np_real_audio_out' + str(idx) + '.txt', real_audio_out.astype('int16'))
+
+
 
