@@ -76,7 +76,7 @@ audio = np.concatenate([np.expand_dims(a_freq.real,3), np.expand_dims(a_freq.ima
 
 #This reversable transformation maps the audio files to [-1,1] cleanly.
 #For a full release upon more success, this should be a function of the data.
-scale_divisor = 2.3
+scale_divisor = 2.32
 audio = np.sign(audio)*np.power(np.abs(audio), 1/20)/scale_divisor
 
 gan = model.GAN()
