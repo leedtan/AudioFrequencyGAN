@@ -113,7 +113,7 @@ for i in range(10000):
                         gan.z_noise : np.random.rand(bs, z_len)
                     })
         print('epoch: ', i, 'batch: ', batch_no, 'g_loss:', g_loss, 'g_reg', g_reg, 'd_loss', d_loss)
-        if batch_no % 2 == 0:
+        if batch_no == 0:
             print('printing some audios')
             _, g_loss, g_reg, gen_audio, real_audio   = sess.run(
                         [g_optim, gan.g_loss, gan.g_reg, gan.gen_audio, gan.real_audio],
