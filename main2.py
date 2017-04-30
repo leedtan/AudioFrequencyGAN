@@ -4,7 +4,7 @@ import matplotlib
 import scipy
 import numpy as np
 import pandas
-import model
+import model2 as model
 import os
 import sys
 import matplotlib.pyplot as plt
@@ -22,6 +22,25 @@ from tensorflow.contrib.distributions import MultivariateNormalDiag as tf_norm
 
 prince = True
 
+def plot10(x, row, col, fig_name):
+    f, a = plt.subplots(row, col*2, figsize=(col*5, row*1.8))
+    for j in range(row):
+        for i in range(col):
+            idx = i + j*col
+            a[j][i].plot(np.fft.irfft(gen_audio_out[idx,:,0] + gen_audio_out[idx,:,1] * 1j,axis=0).astype('int16'))
+            #a[j,i].axis('off')
+            a[j,i+col].set_title('generated time-domain')
+            a[j,i].set_xticks([])
+    for j in range(row):
+        for i in range(col):
+            idx = i + j*col
+            a[j][i+col].plot(gen_audio_out[idx,:,0], c='red', label='real axis')
+            a[j][i+col].plot(gen_audio_out[idx,:,1], c='green', label='imaginary axis')
+            #a[j,i].axis('off')
+            a[j,i+col].set_title('generated freq-domain')
+            a[j,i+col].set_xticks([])
+    f.savefig(fig_name)
+    plt.close()
 audio = [None]*10
 vid = [None]*10
 files = os.listdir('data/audios')
@@ -76,7 +95,7 @@ audio = np.concatenate([np.expand_dims(a_freq.real,3), np.expand_dims(a_freq.ima
 
 #This reversable transformation maps the audio files to [-1,1] cleanly.
 #For a full release upon more success, this should be a function of the data.
-scale_divisor = 2.32
+scale_divisor = 2.3
 audio = np.sign(audio)*np.power(np.abs(audio), 1/20)/scale_divisor
 
 gan = model.GAN()
@@ -122,7 +141,7 @@ for i in range(10000):
                     gan.z_noise : np.random.rand(bs, z_len)
                 })
         print('epoch: ', i, 'batch: ', batch_no, 'g_loss:', g_loss, 'g_reg', g_reg, 'd_loss', d_loss)
-        if batch_no == 5:
+        if batch_no == 3:
             print('printing some audios')
             _, g_loss, g_reg, gen_audio, real_audio   = sess.run(
                         [g_optim, gan.g_loss, gan.g_reg, gan.gen_audio, gan.real_audio],
@@ -137,7 +156,7 @@ for i in range(10000):
             for idx in range(4,6):
                 ade = audio_clip[idx, :,:]
                 ade2 = np.fft.irfft(ade[:,0] + ade[:,1] * 1j,axis=0)
-                hdr = 'outputs/ep_' + str(i) + '_b_' + str(batch_no) + '_'
+                hdr = 'outputs2/ep_' + str(i) + '_b_' + str(batch_no) + '_'
                 
                 #Start by reversing the transformation from [-1,1] to the real frequency signal:
                 #Then reverse the Fourier Transform
@@ -162,7 +181,9 @@ for i in range(10000):
                 plt.title('real audio')
                 plt.savefig(hdr + 'real_audio_img' + str(idx))
                 plt.close()
+                plot10(gen_audio_out, 5, 2, fig_name='outputs2/global_picture_' + str(i))
             print('done printing batch')
+            
 
 
 
