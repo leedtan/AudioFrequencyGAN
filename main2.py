@@ -5,6 +5,7 @@ import scipy
 import numpy as np
 import pandas
 import model2 as model
+from model2 import GAN
 import os
 import sys
 import matplotlib.pyplot as plt
@@ -22,23 +23,25 @@ from tensorflow.contrib.distributions import MultivariateNormalDiag as tf_norm
 
 prince = True
 
-def plot10(x, row, col, fig_name):
+def plot10(x, row, col, fig_name, title_label):
     f, a = plt.subplots(row, col*2, figsize=(col*5, row*1.8))
     for j in range(row):
         for i in range(col):
             idx = i + j*col
-            a[j][i].plot(np.fft.irfft(gen_audio_out[idx,:,0] + gen_audio_out[idx,:,1] * 1j,axis=0).astype('int16'))
+            a[j][i].plot(np.fft.irfft(x[idx,:,0] + x[idx,:,1] * 1j,axis=0).astype('int16'), label = 'audio amplitudes')
             #a[j,i].axis('off')
-            a[j,i+col].set_title('generated time-domain')
+            a[j,i].set_title(title_label + ' time-domain')
             a[j,i].set_xticks([])
+            a[j,i].legend()
     for j in range(row):
         for i in range(col):
             idx = i + j*col
-            a[j][i+col].plot(gen_audio_out[idx,:,0], c='red', label='real axis')
-            a[j][i+col].plot(gen_audio_out[idx,:,1], c='green', label='imaginary axis')
+            a[j][i+col].plot(x[idx,:,0], c='red', label='real axis')
+            a[j][i+col].plot(x[idx,:,1], c='green', label='imaginary axis')
             #a[j,i].axis('off')
-            a[j,i+col].set_title('generated freq-domain')
+            a[j,i+col].set_title(title_label + ' freq-domain')
             a[j,i+col].set_xticks([])
+            a[j,i+col].legend()
     f.savefig(fig_name)
     plt.close()
 audio = [None]*10
@@ -95,8 +98,10 @@ audio = np.concatenate([np.expand_dims(a_freq.real,3), np.expand_dims(a_freq.ima
 
 #This reversable transformation maps the audio files to [-1,1] cleanly.
 #For a full release upon more success, this should be a function of the data.
-scale_divisor = 2.3
-audio = np.sign(audio)*np.power(np.abs(audio), 1/20)/scale_divisor
+scale_divisor = 57.5
+audio_power = 4
+audio_raw = audio
+audio = np.sign(audio_raw)*np.power(np.abs(audio_raw), 1/audio_power)/scale_divisor
 
 gan = model.GAN()
 gan.build_model()
@@ -112,7 +117,12 @@ saver = tf.train.Saver()
 g_loss = 1
 g_reg = 1
 
+saver = tf.train.Saver()
+if 0:
+    saver.restore(sess, 'saved_model.ckpt')
 for i in range(10000):
+    if (i + 1) % 10 == 0:
+        saver.save(sess, 'saved_model.ckpt')
     for batch_no in range(3, 10):
         audio_start = batch_no * audio_second
         audio_end = (batch_no + 1) * audio_second
@@ -122,7 +132,7 @@ for i in range(10000):
         shuf = np.random.randint(2, 6)
         wrongvideos = np.concatenate([videos[shuf:,:,:,:,:], videos[:shuf,:,:,:,:]], 0)
         audio_clip = audio[:,batch_no,:,:]
-        if g_loss < 1.7:
+        if g_loss < 1.8:
             print('running discriminator')
             _, _, g_loss, g_reg, d_loss   = sess.run(
                     [g_optim, d_optim, gan.g_loss, gan.g_reg, gan.d_loss],
@@ -151,8 +161,8 @@ for i in range(10000):
                             gan.real_audio : audio_clip,
                             gan.z_noise : np.random.rand(bs, z_len)
                         })
-            gen_audio_out = np.power(gen_audio * scale_divisor, 20) * np.sign(gen_audio)
-            real_audio_out = np.power(real_audio * scale_divisor, 20)* np.sign(real_audio)
+            gen_audio_out = np.power(gen_audio * scale_divisor, audio_power) * np.sign(gen_audio)
+            real_audio_out = np.power(real_audio * scale_divisor, audio_power)* np.sign(real_audio)
             for idx in range(4,6):
                 ade = audio_clip[idx, :,:]
                 ade2 = np.fft.irfft(ade[:,0] + ade[:,1] * 1j,axis=0)
@@ -181,7 +191,8 @@ for i in range(10000):
                 plt.title('real audio')
                 plt.savefig(hdr + 'real_audio_img' + str(idx))
                 plt.close()
-                plot10(gen_audio_out, 5, 2, fig_name='outputs2/global_picture_' + str(i))
+                plot10(gen_audio_out, 5, 2, fig_name='outputs2/global_picture_generated' + str(i), title_label = 'Gen')
+                plot10(real_audio_out, 5, 2, fig_name='outputs2/global_picture_real' + str(i), title_label = 'Real')
             print('done printing batch')
             
 

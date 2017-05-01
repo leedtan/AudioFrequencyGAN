@@ -122,7 +122,7 @@ class GAN:
 
         self.g_loss = tf.reduce_mean(c_e(gen_img_logit, pos_ex)) + tf.reduce_mean(c_e(gen_txt_logit, pos_ex))
         self.g_reg = tf.reduce_mean(tf.square(self.gen_audio - self.real_audio)) * 0 + \
-                tf.reduce_mean(tf.square(real_acts - gen_acts))/tf.reduce_mean(tf.square(real_acts)) * 1e2
+                tf.reduce_mean(tf.square(real_acts - gen_acts)/tf.abs(real_acts)) * 1e3
         
         d_loss = self.d_loss_real + self.d_loss_wrong + self.d_loss_gen
 
@@ -152,7 +152,7 @@ class GAN:
         self.g_gvs = [grad for grad, var in gvs if grad is not None]
         
         optimizer = tf.train.AdamOptimizer(self.lr, beta1 = beta1)
-        gvs = optimizer.compute_gradients(d_loss,var_list=d_vars)
+        gvs = optimizer.compute_gradients(d_loss + d_l2_reg,var_list=d_vars)
         clip_max = 1
         clip = .01
         capped_gvs = [(tf.clip_by_value(grad, -1*clip,clip), var) for grad, var in gvs if grad is not None]
@@ -202,11 +202,12 @@ class GAN:
         audio = self.add_residual_pre(audio, k_h = k_def, name_func = self.g_name)
         audio = ops.lrelu(bna2(ops.deconv2d_audio(audio, [bs, a4, 2, g_dim],k_h = 40, k_w = 1, d_h=4, d_w=1, name=self.g_name())))
         audio = self.add_residual_pre(audio, k_h = 20, name_func = self.g_name)
-        audio = ops.lrelu(bna3(ops.deconv2d_audio(audio, [bs, a, 2, 1],k_h = 80, k_w = 1, d_h=4, d_w=1, name=self.g_name())))
+        audio = ops.lrelu(bna3(ops.deconv2d_audio(audio, [bs, 5000, 2, 1],k_h = 80, k_w = 1, d_h=5, d_w=1, name=self.g_name())))
         audio = self.add_residual_pre(audio, k_h = 40, name_func = self.g_name)
         
-        audio = ops.deconv2d_audio(audio, [bs, a, 2, 1],k_h = 10, k_w = 2, d_h=1, d_w=1, name=self.g_name())
-        audio = self.add_residual_pre(audio, k_h = 20, name_func = self.g_name)
+        audio = ops.deconv2d_audio(audio, [bs, 5000, 2, 1],k_h = 10, k_w = 2, d_h=1, d_w=1, name=self.g_name())
+        audio = self.add_residual_pre(audio, k_h = 10, name_func = self.g_name)
+        audio = audio[:,500:4500,:,:]
         
         audio = reshape(audio, [bs, a, 2])
         dist = 1
