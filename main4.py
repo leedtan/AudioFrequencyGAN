@@ -4,7 +4,7 @@ import matplotlib
 import scipy
 import numpy as np
 import pandas
-import model3 as model
+import model4 as model
 import os
 import sys
 import matplotlib.pyplot as plt
@@ -117,12 +117,12 @@ g_loss = 1
 g_reg = 1
 
 saver = tf.train.Saver()
-if 1:
-    saver.restore(sess, '/media/lee/datapart/AudioFrequencyGAN/saved_model.ckpt')
-for i in range(30,10000):
+if 0:
+    saver.restore(sess, '/media/lee/datapart/AudioFrequencyGAN/saved_model4.ckpt')
+for i in range(10000):
     if (i + 1) % 10 == 0:
         print('saving updated model')
-        saver.save(sess, 'saved_model2.ckpt')
+        saver.save(sess, 'saved_model4.ckpt')
         print('done saving updated model')
     for batch_no in range(3, 10):
         audio_start = batch_no * audio_second
@@ -167,7 +167,7 @@ for i in range(30,10000):
             for idx in range(4,6):
                 ade = audio_clip[idx, :,:]
                 ade2 = np.fft.irfft(ade[:,0] + ade[:,1] * 1j,axis=0)
-                hdr = 'outputs3/ep_' + str(i) + '_b_' + str(batch_no) + '_'
+                hdr = 'outputs4/ep_' + str(i) + '_b_' + str(batch_no) + '_'
                 
                 #Start by reversing the transformation from [-1,1] to the real frequency signal:
                 #Then reverse the Fourier Transform
@@ -192,8 +192,8 @@ for i in range(30,10000):
                 plt.title('real audio')
                 plt.savefig(hdr + 'real_audio_img' + str(idx))
                 plt.close()
-                plot10(gen_audio_out, 5, 2, fig_name='outputs3/global_picture_generated' + str(i), title_label = 'Gen')
-                plot10(real_audio_out, 5, 2, fig_name='outputs3/global_picture_real' + str(i), title_label = 'Real')
+                plot10(gen_audio_out, 5, 2, fig_name='outputs4/global_picture_generated' + str(i), title_label = 'Gen')
+                plot10(real_audio_out, 5, 2, fig_name='outputs4/global_picture_real' + str(i), title_label = 'Real')
             print('done printing batch')
             
 

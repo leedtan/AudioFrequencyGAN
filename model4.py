@@ -182,6 +182,10 @@ class GAN:
         bna3 = self.g_bn()
         bna4 = self.g_bn()
         
+        bnr0 = self.g_bn()
+        bnr1 = self.g_bn()
+        bnr2 = self.g_bn()
+        
         bnl1 = self.g_bn()
         
         a_g_dim  = 4000
@@ -198,12 +202,31 @@ class GAN:
         k_def = 10
         audio = ops.lrelu(bna0(ops.deconv2d_audio(audio, [bs, a80, 2, g_dim*4],k_h = 5, k_w = 1, d_h=2, d_w=1, name=self.g_name())))
         audio = self.add_residual_pre(audio, k_h = k_def, name_func = self.g_name)
-        audio = ops.lrelu(bna1(ops.deconv2d_audio(audio, [bs, a16, 2, g_dim*2],k_h = 20, k_w = 1, d_h=5, d_w=1, name=self.g_name())))
+        audio = ops.lrelu(bna1(ops.deconv2d_audio(audio, [bs, a16, 2, g_dim],k_h = 20, k_w = 1, d_h=5, d_w=1, name=self.g_name())))
+        
+        audio = reshape(audio, [bs, -1])
+        audiores = ops.lrelu(bnr0(ops.linear(audio, 1000, self.g_name())))
+        audiores = ops.linear(audiores, a16 * 2 * g_dim, self.g_name())
+        audio = audio + audiores
+        audio = reshape(audio, [bs, a16, 2, g_dim])
+        
         audio = self.add_residual_pre(audio, k_h = k_def, name_func = self.g_name)
         audio = ops.lrelu(bna2(ops.deconv2d_audio(audio, [bs, a4, 2, g_dim],k_h = 30, k_w = 1, d_h=4, d_w=1, name=self.g_name())))
+        
+        audio = reshape(audio, [bs, -1])
+        audiores = ops.lrelu(bnr1(ops.linear(audio, 1000, self.g_name())))
+        audiores = ops.linear(audiores, a4 * 2 * g_dim, self.g_name())
+        audio = audio + audiores
+        audio = reshape(audio, [bs, a4, 2, g_dim])
+        
         audio = self.add_residual_pre(audio, k_h = 20, name_func = self.g_name)
         audio = ops.lrelu(bna3(ops.deconv2d_audio(audio, [bs, 5000, 2, 1],k_h = 40, k_w = 1, d_h=5, d_w=1, name=self.g_name())))
         audio = self.add_residual_pre(audio, k_h = 40, name_func = self.g_name)
+        audio = reshape(audio, [bs, -1])
+        audiores = ops.lrelu(bnr2(ops.linear(audio, 1000, self.g_name())))
+        audiores = ops.linear(audiores, 10000, self.g_name())
+        audio = audio + audiores
+        audio = reshape(audio, [bs, 5000, 2, 1])
         
         audio = ops.deconv2d_audio(audio, [bs, 5000, 2, 1],k_h = 10, k_w = 2, d_h=1, d_w=1, name=self.g_name())
         audio = self.add_residual_pre(audio, k_h = 10, name_func = self.g_name)
