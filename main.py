@@ -172,7 +172,8 @@ for i in range(10000):
                         })
             gen_audio_out = np.power(gen_audio * scale_divisor, audio_power) * np.sign(gen_audio)
             real_audio_out = np.power(real_audio * scale_divisor, audio_power)* np.sign(real_audio)
-            for idx in range(4,6):
+            for _ in range(2):
+                idx = np.random.randint(3,9)
                 ade = audio_clip[idx, :,:]
                 ade2 = np.fft.irfft(ade[:,0] + ade[:,1] * 1j,axis=0)
                 hdr = 'outputs4/ep_' + str(i) + '_b_' + str(batch_no) + '_'
