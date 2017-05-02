@@ -122,7 +122,7 @@ class GAN:
 
         self.g_loss = tf.reduce_mean(c_e(gen_img_logit, pos_ex)) + tf.reduce_mean(c_e(gen_txt_logit, pos_ex))
         self.g_reg = tf.reduce_mean(tf.square(self.gen_audio - self.real_audio)) * 0 + \
-                tf.reduce_mean(tf.square(real_acts - gen_acts))/tf.reduce_mean(tf.square(real_acts)) * 1e3
+                tf.reduce_mean(tf.square(real_acts - gen_acts)/tf.abs(real_acts)) * 3e3
         
         d_loss = self.d_loss_real + self.d_loss_wrong + self.d_loss_gen
 
@@ -134,8 +134,8 @@ class GAN:
         d_vars = [var for var in t_vars if 'd_' in var.name]
         g_vars = [var for var in t_vars if 'g_' in var.name]
         
-        d_l2_reg = tf.reduce_sum([tf.reduce_sum(tf.square(var)) * 1e-2 for var in d_vars])
-        g_l2_reg = tf.reduce_sum([tf.reduce_sum(tf.square(var))*1e-4 for var in g_vars])
+        d_l2_reg = tf.reduce_sum([tf.reduce_sum(tf.square(var)) * 1e0 for var in d_vars])
+        g_l2_reg = tf.reduce_sum([tf.reduce_sum(tf.square(var))*1e-6 for var in g_vars])
         
         self.g_reg += g_l2_reg
         self.d_reg = d_l2_reg
@@ -145,16 +145,16 @@ class GAN:
         optimizer = tf.train.AdamOptimizer(self.lr, beta1 = beta1)
         gvs = optimizer.compute_gradients(g_loss + g_reg, var_list=g_vars)
         clip_max = 1
-        clip = .1
+        clip = .01
         capped_gvs = [(tf.clip_by_value(grad, -1*clip,clip), var) for grad, var in gvs if grad is not None]
         capped_gvs = [(tf.clip_by_norm(grad, clip_max), var) for grad, var in capped_gvs if grad is not None]
         self.g_optim = optimizer.apply_gradients(capped_gvs)
         self.g_gvs = [grad for grad, var in gvs if grad is not None]
         
         optimizer = tf.train.AdamOptimizer(self.lr, beta1 = beta1)
-        gvs = optimizer.compute_gradients(d_loss,var_list=d_vars)
+        gvs = optimizer.compute_gradients(d_loss + d_l2_reg,var_list=d_vars)
         clip_max = 1
-        clip = .1
+        clip = .01
         capped_gvs = [(tf.clip_by_value(grad, -1*clip,clip), var) for grad, var in gvs if grad is not None]
         capped_gvs = [(tf.clip_by_norm(grad, clip_max), var) for grad, var in capped_gvs if grad is not None]
         self.d_optim = optimizer.apply_gradients(capped_gvs)
@@ -182,31 +182,55 @@ class GAN:
         bna3 = self.g_bn()
         bna4 = self.g_bn()
         
+        bnr0 = self.g_bn()
+        bnr1 = self.g_bn()
+        bnr2 = self.g_bn()
+        
         bnl1 = self.g_bn()
         
         a_g_dim  = 4000
         a = a_g_dim
         a160, a80, a32, a16, a8, a4, a2 = int(a/160), int(a/80), int(a/32), int(a/16), int(a/8), int(a/4), int(a/2)
-        vid = ops.lrelu(bnv1(ops.conv2d(video, 20, name = self.g_name())))
-        vid = ops.lrelu(bnv2(ops.conv2d(vid, 40, name = self.g_name())))
-        vid = ops.lrelu(bnv3(ops.conv2d(vid, 80, name = self.g_name())))
+        vid = ops.lrelu(bnv1(ops.conv2d(video, 10, k_h = 10, k_w = 10, d_h = 2, d_w = 2, name = self.g_name())))
+        vid = ops.lrelu(bnv2(ops.conv2d(vid, 20, k_h = 10, k_w = 10, d_h = 2, d_w = 2, name = self.g_name())))
+        vid = ops.lrelu(bnv3(ops.conv2d(vid, 40, k_h = 10, k_w = 10, d_h = 2, d_w = 2, name = self.g_name())))
         hidden = reshape(vid, [bs, -1])
         hidden = concat(1, [hidden, z_noise])
         audio = ops.lrelu(bnl1(ops.linear(hidden, a80 * 10, self.g_name())))
         audio = reshape(audio, [bs, a160, 2, 10])
-        g_dim = 100
+        g_dim = 50
         k_def = 10
         audio = ops.lrelu(bna0(ops.deconv2d_audio(audio, [bs, a80, 2, g_dim*4],k_h = 5, k_w = 1, d_h=2, d_w=1, name=self.g_name())))
         audio = self.add_residual_pre(audio, k_h = k_def, name_func = self.g_name)
-        audio = ops.lrelu(bna1(ops.deconv2d_audio(audio, [bs, a16, 2, g_dim*2],k_h = 20, k_w = 1, d_h=5, d_w=1, name=self.g_name())))
-        audio = self.add_residual_pre(audio, k_h = k_def, name_func = self.g_name)
-        audio = ops.lrelu(bna2(ops.deconv2d_audio(audio, [bs, a4, 2, g_dim],k_h = 40, k_w = 1, d_h=4, d_w=1, name=self.g_name())))
-        audio = self.add_residual_pre(audio, k_h = 20, name_func = self.g_name)
-        audio = ops.lrelu(bna3(ops.deconv2d_audio(audio, [bs, a, 2, 1],k_h = 80, k_w = 1, d_h=4, d_w=1, name=self.g_name())))
-        audio = self.add_residual_pre(audio, k_h = 40, name_func = self.g_name)
+        audio = ops.lrelu(bna1(ops.deconv2d_audio(audio, [bs, a16, 2, g_dim],k_h = 20, k_w = 1, d_h=5, d_w=1, name=self.g_name())))
         
-        audio = ops.deconv2d_audio(audio, [bs, a, 2, 1],k_h = 10, k_w = 2, d_h=1, d_w=1, name=self.g_name())
+        audio = reshape(audio, [bs, -1])
+        audiores = ops.lrelu(bnr0(ops.linear(audio, 1000, self.g_name())))
+        audiores = ops.linear(audiores, a16 * 2 * g_dim, self.g_name())
+        audio = audio + audiores
+        audio = reshape(audio, [bs, a16, 2, g_dim])
+        
+        audio = self.add_residual_pre(audio, k_h = k_def, name_func = self.g_name)
+        audio = ops.lrelu(bna2(ops.deconv2d_audio(audio, [bs, a4, 2, g_dim],k_h = 30, k_w = 1, d_h=4, d_w=1, name=self.g_name())))
+        
+        audio = reshape(audio, [bs, -1])
+        audiores = ops.lrelu(bnr1(ops.linear(audio, 1000, self.g_name())))
+        audiores = ops.linear(audiores, a4 * 2 * g_dim, self.g_name())
+        audio = audio + audiores
+        audio = reshape(audio, [bs, a4, 2, g_dim])
+        
         audio = self.add_residual_pre(audio, k_h = 20, name_func = self.g_name)
+        audio = ops.lrelu(bna3(ops.deconv2d_audio(audio, [bs, 5000, 2, 1],k_h = 40, k_w = 1, d_h=5, d_w=1, name=self.g_name())))
+        audio = self.add_residual_pre(audio, k_h = 40, name_func = self.g_name)
+        audio = reshape(audio, [bs, -1])
+        audiores = ops.lrelu(bnr2(ops.linear(audio, 1000, self.g_name())))
+        audiores = ops.linear(audiores, 10000, self.g_name())
+        audio = audio + audiores
+        audio = reshape(audio, [bs, 5000, 2, 1])
+        
+        audio = ops.deconv2d_audio(audio, [bs, 5000, 2, 1],k_h = 10, k_w = 2, d_h=1, d_w=1, name=self.g_name())
+        audio = self.add_residual_pre(audio, k_h = 10, name_func = self.g_name)
+        audio = audio[:,1000:5000,:,:]
         
         audio = reshape(audio, [bs, a, 2])
         dist = 1
@@ -255,7 +279,7 @@ class GAN:
         audio = reshape(audio, [a_sh[0], a_sh[1], a_sh[2], 1])
         s = video.get_shape()[1].value
         
-        ddim = 200
+        ddim = 50
         
         a1 = ops.lrelu(ops.conv2d(audio, ddim, k_h = 15, k_w = 1, d_h = 4, d_w = 1, name='d_a1'))
         a2 = ops.lrelu(ops.conv2d(a1, ddim*2, k_h = 15, k_w = 1, d_h = 4, d_w = 2, name='d_a2'))
